@@ -42,23 +42,24 @@ function renderView() {
   const authBox = document.querySelector(".authBox");
   if (authBox) authBox.style.display = currentView === "admin" ? "block" : "none";
 
-  // If admin view but not logged in, keep user view
-  if (currentView === "admin" && !token) {
-    alert("Admin login required");
-    currentView = "user";
-    if (authBox) authBox.style.display = "none";
+  // Active tab highlight
+  const userBtn = document.getElementById("userViewBtn");
+  const adminBtn = document.getElementById("adminViewBtn");
+  if (userBtn && adminBtn) {
+    userBtn.classList.toggle("active", currentView === "user");
+    adminBtn.classList.toggle("active", currentView === "admin");
   }
-    const userBtn = document.getElementById("userViewBtn");
-const adminBtn = document.getElementById("adminViewBtn");
 
-if (userBtn && adminBtn) {
-  userBtn.classList.toggle("active", currentView === "user");
-  adminBtn.classList.toggle("active", currentView === "admin");
-}
+  // If admin view and not logged in: don't kick back, just show message
+  const authMsg = document.getElementById("authMsg");
+  if (currentView === "admin" && !token && authMsg) {
+    authMsg.textContent = "Admin login required to update status.";
+  }
 
   setAuthUI();
   loadRequests();
 }
+
 
 // ================== THEME TOGGLE ==================
 (function initTheme() {
@@ -152,78 +153,68 @@ if (userBtn && adminBtn) {
 
 // ================== CREATE REQUEST (USER) ==================
 (function initForm() {
-  const form = document.getElementById("requestForm");
-  if (!form) return;
+  document.getElementById("requestForm").addEventListener("submit", async function (e) {
+  e.preventDefault();
 
-  form.addEventListener("submit", async function (e) {
-    e.preventDefault();
+  const title = document.getElementById("title").value.trim();
+  const category = document.getElementById("category").value;
+  const email = document.getElementById("email").value.trim();
+  const description = document.getElementById("description").value.trim();
 
-    const title = document.getElementById("title")?.value || "";
-    const category = document.getElementById("category")?.value || "";
-    const description = document.getElementById("description")?.value || "";
-    const email = document.getElementById("email")?.value || "";
-
-    const resp = await fetch(API_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title, category, description, email })
-    });
-
-    if (!resp.ok) {
-      const err = await resp.json().catch(() => ({}));
-      alert(err.message || "Failed to create request");
-      return;
-    }
-
-    this.reset();
-    loadRequests();
+  const resp = await fetch(API_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title, category, email, description })
   });
+
+  const data = await resp.json().catch(() => ({}));
+
+  if (!resp.ok) {
+    alert(data.message || "Failed to create request");
+    return;
+  }
+
+  this.reset();
+  await loadRequests(); 
+});
+
 })();
 
 // ================== LOAD + RENDER REQUESTS ==================
-async function loadRequests() {
-  const table = document.getElementById("requestTable");
-  if (!table) return;
 
+async function loadRequests() {
   const res = await fetch(API_URL, { cache: "no-store" });
   const data = await res.json();
+
+  const table = document.getElementById("requestTable");
+  table.innerHTML = "";
 
   const token = getToken();
   const isAdmin = currentView === "admin" && !!token;
 
-  table.innerHTML = "";
+  data.forEach((req) => {
+    const mongoId = req._id;
+    if (!mongoId) console.warn("Missing _id for request:", req);
+    const rid = req._id || req.id; // Mongo _id fallback
+    const ticket = req.ticketNo
+      ? `REQ-${String(req.ticketNo).padStart(6, "0")}`
+      : (rid || "-");
 
-  data.forEach(req => {
-    // Badge class
-    const badgeClass =
-      req.status === "Open" ? "badge-open" :
-      req.status === "In Progress" ? "badge-progress" :
-      "badge-closed";
-
-    // Progress class
-    const progressClass =
-      req.status === "Open" ? "p25" :
-      req.status === "In Progress" ? "p60" :
-      "p100";
+    // support both Mongo timestamps and your old createdAt string
+    const createdRaw = req.createdAt || req.createdAtCustom || req.created_at || "";
+    const created = createdRaw ? new Date(createdRaw).toLocaleString() : "-";
 
     table.innerHTML += `
       <tr>
-        <td>${req.id}</td>
-        <td>${req.title}</td>
-        <td>${req.category}</td>
+        <td>${ticket}</td>
+        <td>${req.title || "-"}</td>
+        <td>${req.category || "-"}</td>
 
         <td>
-          <!-- OPTION A: Badge -->
-          <span class="badge ${badgeClass}">${req.status}</span>
-
-          <!-- OPTION B: Progress bar -->
-          <div class="progress">
-            <div class="${progressClass}"></div>
-          </div>
-
+          ${req.status || "Open"}
           ${isAdmin ? `
-            <div style="margin-top:8px">
-              <select class="statusSelect" data-id="${req.id}">
+            <div style="margin-top:8px;">
+              <select class="statusSelect" data-id="${mongoId}">
                 <option value="Open" ${req.status === "Open" ? "selected" : ""}>Open</option>
                 <option value="In Progress" ${req.status === "In Progress" ? "selected" : ""}>In Progress</option>
                 <option value="Closed" ${req.status === "Closed" ? "selected" : ""}>Closed</option>
@@ -232,28 +223,26 @@ async function loadRequests() {
           ` : ``}
         </td>
 
-        <td>${req.createdAt}</td>
+        <td>${created}</td>
 
         <td>
-          ${isAdmin
-            ? `<button class="updateBtn" data-id="${req.id}">Update</button>`
-            : `<span style="color:var(--muted); font-size:12px;">Admin only</span>`
-          }
+          ${isAdmin ? `<button class="updateBtn" data-id="${mongoId}" type="button">Update</button>` : "—"}
         </td>
       </tr>
     `;
   });
 
-  // Attach handlers only if admin
+  // ✅ Wire update buttons (Admin)
   if (!isAdmin) return;
 
-  document.querySelectorAll(".updateBtn").forEach(btn => {
+  document.querySelectorAll(".updateBtn").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const id = btn.dataset.id;
-      const select = document.querySelector(`.statusSelect[data-id="${id}"]`);
-      const newStatus = select ? select.value : null;
+      const sel = document.querySelector(`.statusSelect[data-id="${id}"]`);
+      const newStatus = sel?.value;
 
-      if (!newStatus) return alert("Select a status");
+      if (!id) return alert("Missing request id");
+      if (!newStatus) return alert("Select a status first");
 
       const resp = await fetch(`${API_URL}/${id}/status`, {
         method: "PUT",
@@ -265,17 +254,15 @@ async function loadRequests() {
       });
 
       const raw = await resp.text();
+      if (!resp.ok) return alert(`Failed (${resp.status})\n${raw}`);
 
-      if (!resp.ok) {
-        alert(`Failed (${resp.status})\n${raw}`);
-        return;
-      }
-
-      // refresh so badge/progress updates
       loadRequests();
     });
   });
 }
 
+
+
 // ================== INIT ==================
 renderView();
+loadRequests();

@@ -1,7 +1,20 @@
+require("dotenv").config();
+const Request = require("./models/Request");
+const Counter = require("./models/Counter");
+
+
+const mongoose = require("mongoose");
 const express = require("express");
 const cors = require("cors");
 const nodemailer = require("nodemailer");
-require("dotenv").config();
+
+mongoose
+.connect(process.env.MONGO_URI)
+.then(() => console.log("MongoDB connected"))
+.catch(err => console.log("Mongo error:", err.message));
+
+
+
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 
@@ -13,29 +26,41 @@ app.use(express.json());
 const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
-    user: "sudharsansrinivasan621@gmail.com",
-    pass: "bjsu ozfr xfyi jrbd"
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS
   }
 });
+transporter.verify()
+  .then(() => console.log("Mail transporter ready"))
+  .catch((err) => console.log("Mail transporter error:", err.message));
 
-function sendStatusEmail(to, id, title, oldStatus, newStatus) {
+
+function sendStatusEmail(to, request, oldStatus, newStatus) {
+  const ticket = request.ticketNo
+    ? `REQ-${String(request.ticketNo).padStart(6, "0")}`
+    : request._id.toString().slice(-6);
+
   return transporter.sendMail({
-    from: "yourgmail@gmail.com",
+    from: process.env.EMAIL_USER,
     to,
-    subject: `Request #${id} status updated`,
-    text: `
-Hello,
+    subject: `${ticket} — Status Updated`,
+    text: `Hello,
 
 Your service request has been updated.
 
-Request ID: ${id}
-Title: ${title}
-Status: ${oldStatus} → ${newStatus}
+Ticket: ${ticket}
+Title: ${request.title}
+Category: ${request.category}
+Old Status: ${oldStatus}
+New Status: ${newStatus}
 
-Thank you.
+Thank you,
+Service Management System
 `
   });
 }
+
+
 
 function createToken(user) {
   return jwt.sign(
@@ -137,62 +162,62 @@ app.post("/auth/login", async (req, res) => {
 });
 
 
-app.get("/requests", (req, res) => {
+app.get("/requests", async (req, res) => {
+  try {
+    const requests = await Request.find().sort({ createdAt: -1 });
     res.json(requests);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
 });
 
-app.post("/requests", (req, res) => {
-    const { title, category,email } = req.body;
+app.post("/requests", async (req, res) => {
+  const { title, category, email } = req.body;
 
-    if (!email) return res.status(400).json({ message: "Email is required" });
+  if (!email) return res.status(400).json({ message: "Email required" });
 
-    const newRequest = {
-        id: id++,
-        title,
-        category,
-        email,
-        status: "Open",
-        createdAt: new Date().toLocaleString()
-    };
+  const counter = await Counter.findOneAndUpdate(
+    { name: "request" },
+    { $inc: { seq: 1 } },
+    { new: true, upsert: true }
+  );
 
-    requests.push(newRequest);
-    res.status(201).json(newRequest);
+  const newRequest = await Request.create({
+    title,
+    category,
+    email,
+    ticketNo: counter.seq
+  });
+
+  res.status(201).json(newRequest);
 });
 
-app.put("/requests/:id/status", auth, adminOnly, async (req, res) => {
-    const requestId = Number(req.params.id);
+app.put("/requests/:id/status", auth, async (req, res) => {
+  try {
     const { status } = req.body;
+    const id = req.params.id;
 
-    if (!status) return res.status(400).json({ message: "Status required" });
-
-    const request = requests.find(r => r.id === requestId);
+    const request = await Request.findById(id);
     if (!request) return res.status(404).json({ message: "Request not found" });
 
     const oldStatus = request.status;
-    const newStatus = status;
+    request.status = status;
+    await request.save();
 
-    if (oldStatus === newStatus) {
-        return res.json({ message: "No change", request });
+    // send email
+    try {
+      await sendStatusEmail(request.email, request, oldStatus, status);
+    } catch (err) {
+      console.log("Mail failed:", err.message);
     }
 
-    request.status = newStatus;
-
-let emailSent = false;
-
-try {
-  const info = await sendStatusEmail(request.email, request.id, request.title, oldStatus, newStatus);
-  emailSent = true;
-  console.log("Email sent:", info.response);
-} catch (err) {
-  console.log("Email failed:", err.message);
-}
-
-res.json({ message: "Status updated", request, emailSent });
-
-
-
     res.json({ message: "Status updated", request });
+  } catch (err) {
+    console.log("Status update error:", err.message);
+    res.status(500).json({ message: err.message });
+  }
 });
+
 
 app.listen(5000, () => {
     console.log("Server running on port 5000");
