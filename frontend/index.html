@@ -1,47 +1,77 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Service Request System</title>
-    <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8" />
+  <title>Service Request System</title>
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
 
+  <!-- Top bar (Title + Dark mode) -->
+  <div class="topbar">
     <h2>Service Request System</h2>
+    <button id="themeToggle" class="theme-btn" type="button">🌙</button>
+  </div>
 
-    <!-- Raise Request Form -->
-    <form id="requestForm">
-        <input type="text" id="title" placeholder="Request Title" required>
+  <!-- Primary nav (User/Admin) -->
+  <div class="navbar">
 
-        <select id="category" required>
-            <option value="">Select Category</option>
-            <option>Electrical</option>
-            <option>Plumbing</option>
-            <option>Internet</option>
-            <option>Cleaning</option>
-        </select>
+    <div class="navLinks">
+      <button id="userViewBtn" type="button">User Portal</button>
+      <button id="adminViewBtn" type="button">Admin Portal</button>
+    </div>
 
-        <textarea id="description" placeholder="Describe the issue" required></textarea>
+    <div class="navAuth">
+      <span id="navUser">Guest</span>
+      <button id="navLogout" type="button" style="display:none;">Logout</button>
+    </div>
+  </div>
 
-        <button type="submit">Raise Request</button>
-    </form>
+  <!-- Admin login box (shown only in Admin portal by JS) -->
+  <div class="authBox">
+    <div class="authRow">
+      <input type="email" id="loginEmail" placeholder="Admin Email" />
+      <input type="password" id="loginPassword" placeholder="Password" />
+      <button id="loginBtn" type="button">Login</button>
+      <button id="logoutBtn" type="button" style="display:none;">Logout</button>
+    </div>
+    <p id="authMsg" class="authMsg">Not logged in</p>
+  </div>
 
-    <!-- Request Table -->
-    <table>
-        <thead>
-            <tr>
-                <th>ID</th>
-                <th>Title</th>
-                <th>Category</th>
-                <th>Status</th>
-                <th>Created At</th>
-            </tr>
-        </thead>
-        <tbody id="requestTable">
-            <!-- Dynamic rows will be added here -->
-        </tbody>
-    </table>
+  <!-- Raise Request Form (User Portal) -->
+  <form id="requestForm">
+    <input type="text" id="title" placeholder="Request Title" required />
+    <input type="email" id="email" placeholder="Your Email" required />
 
-    <script src="script.js"></script>
+    <select id="category" required>
+      <option value="">Select Category</option>
+      <option>Electrical</option>
+      <option>Plumbing</option>
+      <option>Internet</option>
+      <option>Cleaning</option>
+      <option>Others</option>
+    </select>
+
+    <textarea id="description" placeholder="Describe the issue" required></textarea>
+
+    <button type="submit">Raise Request</button>
+  </form>
+
+  <!-- Request Table -->
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Title</th>
+        <th>Category</th>
+        <th>Status</th>
+        <th>Created At</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody id="requestTable"></tbody>
+  </table>
+
+  <script src="script.js"></script>
 </body>
 </html>
