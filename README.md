@@ -17,7 +17,7 @@ Manual service issue tracking through calls or messages leads to missed requests
 - Tools: Git, GitHub
 
 ## How to Run
-1. Navigate to backend folder and start server:
+1. Navigate to backend folder and start server: node server.js
 2. Open `index.html` in browser.
 
 ## Learning Outcome
