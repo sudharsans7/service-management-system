@@ -25,3 +25,7 @@ Manual service issue tracking through calls or messages leads to missed requests
 - REST API integration
 - SDLC understanding
 - Version control using Git
+
+## Architecture Diagram
+![Architecture](docs/architecture.png)
+
